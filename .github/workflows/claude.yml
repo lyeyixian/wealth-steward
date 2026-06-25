@@ -36,15 +36,18 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 
+          # Assigning an issue to this GitHub user triggers Claude to work on it.
+          assignee_trigger: 'lyeyixian'
+
           # This is an optional setting that allows Claude to read CI results on PRs
           additional_permissions: |
             actions: read
 
-          # Optional: Give a custom prompt to Claude. If this is not specified, Claude will perform the instructions specified in the comment that tagged it.
-          # prompt: 'Update the pull request description to include a summary of changes.'
+          # Always-on guidance layered on top of the trigger (comment, review, or
+          # issue assignment): when the work is for a GitHub issue, use the /implement
+          # skill. This appends to the system prompt, so the normal @claude comment
+          # behaviour is unchanged — the comment's instructions are still followed.
+          claude_args: '--append-system-prompt "When working on a GitHub issue, use the /implement skill to carry out the work."'
 
-          # Optional: Add claude_args to customize behavior and configuration
           # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
           # or https://code.claude.com/docs/en/cli-reference for available options
-          # claude_args: '--allowed-tools Bash(gh pr *)'
-
