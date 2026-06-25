@@ -1,0 +1,64 @@
+services:
+  actual-server:
+    image: actualbudget/actual-server:latest
+    ports:
+      - "5006:5006"
+    volumes:
+      - actual-data:/data
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: wealth_steward
+      POSTGRES_USER: wealth_steward
+      POSTGRES_PASSWORD: wealth_steward
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wealth_steward -d wealth_steward"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  ledger:
+    build:
+      context: ./services/ledger
+    ports:
+      - "3001:3001"
+    environment:
+      ACTUAL_SERVER_URL: http://actual-server:5006
+      PORT: "3001"
+    depends_on:
+      - actual-server
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ./services/api
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://wealth_steward:wealth_steward@postgres:5432/wealth_steward
+      PORT: "8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./services/web
+    ports:
+      - "3000:80"
+    depends_on:
+      - api
+      - ledger
+    restart: unless-stopped
+
+volumes:
+  actual-data:
+  postgres-data:
