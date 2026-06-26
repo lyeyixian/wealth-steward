@@ -1,0 +1,9 @@
+[project]
+name = "wealth-steward-api"
+version = "0.1.0"
+description = "AI Backend — Monitor, jobs, Wealth Layer. Walking-skeleton shell exposes /health only."
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

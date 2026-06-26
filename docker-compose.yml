@@ -1,0 +1,94 @@
+name: wealth-steward
+
+# Walking skeleton (issue #2): the five services from the ROADMAP layout, wired
+# end-to-end with no domain behavior yet. Each owned service (ledger, api, web)
+# exposes /health; ledger health proves Actual reachability, api health proves
+# Postgres reachability.
+
+services:
+  # Cash Ledger system of record (ADR 0002). A human logs in here to create a budget.
+  actual-server:
+    image: actualbudget/actual-server:latest
+    ports:
+      - "5006:5006"
+    volumes:
+      - actual-data:/data
+    restart: unless-stopped
+
+  # Wealth Layer + harness state + job queue (ROADMAP datastore).
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: wealth
+      POSTGRES_PASSWORD: wealth
+      POSTGRES_DB: wealth
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wealth -d wealth"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # Ledger Service (TS) — the only component that touches Actual (ADR 0006).
+  ledger:
+    build: ./services/ledger
+    environment:
+      PORT: "3001"
+      ACTUAL_SERVER_URL: http://actual-server:5006
+    ports:
+      - "3001:3001"
+    depends_on:
+      - actual-server
+    healthcheck:
+      # Node ships a global fetch; avoids depending on wget/curl in the image.
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://localhost:3001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # AI Backend (Python) — Monitor + jobs + Wealth Layer; runs migrations on boot.
+  api:
+    build: ./services/api
+    environment:
+      DATABASE_URL: postgresql+psycopg://wealth:wealth@postgres:5432/wealth
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Web (React/TS) — served static by nginx.
+  web:
+    build: ./services/web
+    ports:
+      - "3000:80"
+    depends_on:
+      - api
+      - ledger
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:80/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  actual-data:
+  pg-data:
